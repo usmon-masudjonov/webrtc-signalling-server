@@ -45,29 +45,55 @@ export class SocketIOGateway
     this.socketManager.addSocket(roomId, client);
 
     if (numberOfParticipants === 0) {
-      this.socketManager.sendTo(roomId, 'room_created', { roomId });
+      this.meshTopologyService.createRoom(roomId).createPeer(roomId, client.id);
+
+      this.socketManager.sendToRoom(roomId, 'room_created', { roomId });
     } else {
-      this.socketManager.sendTo(roomId, 'joined', { roomId });
+      this.meshTopologyService.createPeer(roomId, client.id);
+
+      this.socketManager.sendToRoom(roomId, 'joined', { roomId });
     }
   }
 
   @SubscribeMessage('start_call')
   handleStartCallEvent(@MessageBody() roomId: string) {
-    this.socketManager.sendTo(roomId, 'start_call', { roomId });
+    this.socketManager.sendToRoom(roomId, 'start_call', { roomId });
   }
 
   @SubscribeMessage('webrtc_offer')
-  handleWebRTCOfferEvent(@MessageBody() data: any) {
-    this.socketManager.sendTo(data.roomId, 'webrtc_offer', data.sdp);
+  handleWebRTCOfferEvent(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: any,
+  ) {
+    // get all room members except client himself
+    const roomMembers: Socket[] = this.socketManager.getRoomMembers(
+      data.roomId,
+      [client.id],
+    );
+
+    // get all peers of the client
+    const peersOfThisClient = this.meshTopologyService.getPeersOfPeer(
+      data.roomId,
+      client.id,
+    );
+
+    // defines clients who hasn't been connected to the client
+    const notConnectedClients = roomMembers.filter((socket: Socket) => {
+      return !peersOfThisClient.includes(socket.id);
+    });
+
+    notConnectedClients.forEach((socket: Socket) => {
+      socket.emit('webrtc_offer', data.sdp);
+    });
   }
 
   @SubscribeMessage('webrtc_answer')
   handleWebRTCAnswerEvent(@MessageBody() data: any) {
-    this.socketManager.sendTo(data.roomId, 'webrtc_answer', data.sdp);
+    this.socketManager.sendToRoom(data.roomId, 'webrtc_answer', data.sdp);
   }
 
   @SubscribeMessage('webrtc_ice_candidate')
   handleWebRTCICECandidateEvent(@MessageBody() data: any) {
-    this.socketManager.sendTo(data.roomId, 'webrtc_ice_candidate', data);
+    this.socketManager.sendToRoom(data.roomId, 'webrtc_ice_candidate', data);
   }
 }

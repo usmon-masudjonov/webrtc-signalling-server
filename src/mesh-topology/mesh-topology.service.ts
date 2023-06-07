@@ -14,7 +14,22 @@ type PeersOfPeer = string[];
 export class MeshTopologyService {
   private readonly adjacentList: AdjacentList = {};
 
-  addConnection(roomId: string, peer1: string, peer2: string | string[]): void {
+  createRoom(roomId: string): this {
+    this.adjacentList[roomId] = {};
+    return this;
+  }
+
+  createPeer(roomId: string, peerId: string): this {
+    if (!this.adjacentList[roomId]) {
+      this.adjacentList[roomId] = {};
+    }
+
+    this.adjacentList[roomId][peerId] = [];
+
+    return this;
+  }
+
+  createConnection(roomId: string, peer1: string, peer2: string): this {
     if (!this.adjacentList[roomId]) {
       this.adjacentList[roomId] = {};
     }
@@ -23,23 +38,34 @@ export class MeshTopologyService {
       this.adjacentList[roomId][peer1] = [];
     }
 
-    if (Array.isArray(peer2)) {
-      this.adjacentList[roomId][peer1] = [
-        ...this.adjacentList[roomId][peer1],
-        ...peer2,
-      ];
-    } else {
-      this.adjacentList[roomId][peer1].push(peer2);
+    if (!this.adjacentList[roomId][peer2]) {
+      this.adjacentList[roomId][peer2] = [];
     }
+
+    this.adjacentList[roomId][peer1].push(peer2);
+    this.adjacentList[roomId][peer2].push(peer1);
+
+    return this;
   }
 
-  removeConnection(roomId: string, peer1: string, peer2: string): void {
-    if (this.adjacentList[roomId] && this.adjacentList[roomId][peer1]) {
+  removeConnection(roomId: string, peer1: string, peer2: string): this {
+    if (
+      this.adjacentList[roomId] &&
+      this.adjacentList[roomId][peer1] &&
+      this.adjacentList[roomId][peer2]
+    ) {
       this.adjacentList[roomId][peer1].splice(
         this.adjacentList[roomId][peer1].indexOf(peer2),
         1,
       );
+
+      this.adjacentList[roomId][peer2].splice(
+        this.adjacentList[roomId][peer2].indexOf(peer1),
+        1,
+      );
     }
+
+    return this;
   }
 
   getRoom(roomId: string): PeersOfRoom {
