@@ -8,6 +8,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { MeshTopologyService } from 'src/mesh-topology/mesh-topology.service';
 import SocketManager from 'src/socket-manager/socket-manager';
 
 @WebSocketGateway({
@@ -18,7 +19,10 @@ import SocketManager from 'src/socket-manager/socket-manager';
 export class SocketIOGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
-  constructor(private readonly socketManager: SocketManager) {}
+  constructor(
+    private readonly socketManager: SocketManager,
+    private readonly meshTopologyService: MeshTopologyService,
+  ) {}
 
   @WebSocketServer()
   server: Server;
