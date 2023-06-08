@@ -21,7 +21,7 @@ export default class SocketManager {
     const members = [];
 
     this.sockets.get(roomId).forEach((socket: Socket) => {
-      if (!except.includes(socket.id)) {
+      if (!except?.includes(socket.id)) {
         members.push(socket);
       }
     });

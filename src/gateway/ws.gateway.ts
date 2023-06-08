@@ -10,6 +10,13 @@ import {
 import { Server, Socket } from 'socket.io';
 import { MeshTopologyService } from 'src/mesh-topology/mesh-topology.service';
 import SocketManager from 'src/socket-manager/socket-manager';
+import {
+  StartCallingToNewPeerDTO,
+  OfferDTO,
+  ICECandidateDTO,
+  AnswerDTO,
+  AnswerOfferProcessCompletionDTO,
+} from './dto/events.dto';
 
 @WebSocketGateway({
   cors: {
@@ -28,11 +35,11 @@ export class SocketIOGateway
   server: Server;
 
   handleConnection(client: Socket) {
-    console.log(`Client connected:`, client.id);
+    console.log(client.id);
   }
 
   handleDisconnect(client: Socket) {
-    console.log(`Client disconnected:`, client.id);
+    console.log(client.id);
   }
 
   @SubscribeMessage('join')
@@ -47,53 +54,78 @@ export class SocketIOGateway
     if (numberOfParticipants === 0) {
       this.meshTopologyService.createRoom(roomId).createPeer(roomId, client.id);
 
-      this.socketManager.sendToRoom(roomId, 'room_created', { roomId });
+      this.socketManager.sendToRoom(roomId, 'room_created', {
+        roomId,
+        newPeerId: client.id,
+      });
     } else {
       this.meshTopologyService.createPeer(roomId, client.id);
 
-      this.socketManager.sendToRoom(roomId, 'joined', { roomId });
-    }
-  }
+      const roomMembers: Socket[] = this.socketManager.getRoomMembers(roomId, [
+        client.id,
+      ]);
 
-  @SubscribeMessage('start_call')
-  handleStartCallEvent(@MessageBody() roomId: string) {
-    this.socketManager.sendToRoom(roomId, 'start_call', { roomId });
+      this.server.to(client.id).emit('setup_local_stream', {
+        roomId,
+      });
+
+      roomMembers.forEach((socket: Socket) => {
+        socket.emit('new_peer_created', {
+          roomId,
+          peerTo: socket.id,
+          newPeerId: client.id,
+        });
+      });
+    }
   }
 
   @SubscribeMessage('webrtc_offer')
   handleWebRTCOfferEvent(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: any,
+    @MessageBody() data: OfferDTO,
   ) {
-    // get all room members except client himself
-    const roomMembers: Socket[] = this.socketManager.getRoomMembers(
-      data.roomId,
-      [client.id],
-    );
-
-    // get all peers of the client
-    const peersOfThisClient = this.meshTopologyService.getPeersOfPeer(
-      data.roomId,
-      client.id,
-    );
-
-    // defines clients who hasn't been connected to the client
-    const notConnectedClients = roomMembers.filter((socket: Socket) => {
-      return !peersOfThisClient.includes(socket.id);
-    });
-
-    notConnectedClients.forEach((socket: Socket) => {
-      socket.emit('webrtc_offer', data.sdp);
+    this.server.to(data.peerTo).emit('new_webrtc_offer', {
+      type: data.type,
+      sdp: data.sdp,
+      roomId: data.roomId,
+      peerFrom: data.peerFrom,
+      peerTo: data.peerTo,
     });
   }
 
-  @SubscribeMessage('webrtc_answer')
-  handleWebRTCAnswerEvent(@MessageBody() data: any) {
-    this.socketManager.sendToRoom(data.roomId, 'webrtc_answer', data.sdp);
+  @SubscribeMessage('webrtc_answer_to_the_offer')
+  handleWebRTCAnswerEvent(
+    @ConnectedSocket() _client: Socket,
+    @MessageBody() data: AnswerDTO,
+  ) {
+    this.server.to(data.peerTo).emit('webrtc_answer_to_the_offer', {
+      roomId: data.roomId,
+      sdp: data.sdp,
+      peerFrom: data.peerFrom,
+      peerTo: data.peerTo,
+    });
   }
 
   @SubscribeMessage('webrtc_ice_candidate')
-  handleWebRTCICECandidateEvent(@MessageBody() data: any) {
-    this.socketManager.sendToRoom(data.roomId, 'webrtc_ice_candidate', data);
+  handleWebRTCICECandidateEvent(
+    @ConnectedSocket() _client: Socket,
+    @MessageBody() data: ICECandidateDTO,
+  ) {
+    this.server.to(data.peerTo).emit('webrtc_ice_candidate', data);
+  }
+
+  @SubscribeMessage('webrtc_signalling_completion')
+  handleWebRTCSignallingCompletionEvent(
+    @ConnectedSocket() _client: Socket,
+    @MessageBody() data: AnswerOfferProcessCompletionDTO,
+  ) {
+    this.meshTopologyService.createConnection(
+      data.roomId,
+      data.peerFrom,
+      data.peerTo,
+    );
+
+    console.table(this.meshTopologyService.getRoom(data.roomId));
+    console.log(this.meshTopologyService.getRoom(data.roomId));
   }
 }
