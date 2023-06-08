@@ -19,6 +19,14 @@ export class MeshTopologyService {
     return this;
   }
 
+  getPeersCount(roomId: string): number {
+    if (!this.adjacentList[roomId]) {
+      return 0;
+    }
+
+    return Object.keys(this.adjacentList[roomId]).length;
+  }
+
   createPeer(roomId: string, peerId: string): this {
     if (!this.adjacentList[roomId]) {
       this.adjacentList[roomId] = {};

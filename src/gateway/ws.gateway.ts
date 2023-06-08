@@ -47,7 +47,7 @@ export class SocketIOGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() roomId: string,
   ) {
-    const numberOfParticipants = this.socketManager.getSocketCount(roomId);
+    const numberOfParticipants = this.meshTopologyService.getPeersCount(roomId);
 
     this.socketManager.addSocket(roomId, client);
 
